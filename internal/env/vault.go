@@ -60,3 +60,16 @@ func (v *Vault) DecryptToString(ciphertext []byte) (string, error) {
 	}
 	return Serialize(entries), nil
 }
+
+// EncryptEntries serialises the given entries and returns the age-encrypted
+// ciphertext. It is the inverse of Decrypt.
+func (v *Vault) EncryptEntries(entries []Entry) ([]byte, error) {
+	plaintext := Serialize(entries)
+
+	var buf bytes.Buffer
+	if err := v.enc.Encrypt(&buf, strings.NewReader(plaintext)); err != nil {
+		return nil, fmt.Errorf("encrypting env: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
