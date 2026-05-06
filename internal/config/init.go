@@ -23,7 +23,7 @@ func Init(opts InitOptions) (*Config, error) {
 		var err error
 		opts.Dir, err = os.Getwd()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("config: resolving working directory: %w", err)
 		}
 	}
 
@@ -45,7 +45,7 @@ func Init(opts InitOptions) (*Config, error) {
 		return nil, err
 	}
 	if err := Save(opts.Dir, cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("config: saving new config: %w", err)
 	}
 	return cfg, nil
 }
