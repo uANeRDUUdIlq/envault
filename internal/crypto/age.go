@@ -87,3 +87,15 @@ func (e *Encryptor) Decrypt(ciphertext string) ([]byte, error) {
 
 	return plaintext, nil
 }
+
+// CanEncrypt reports whether the Encryptor has at least one recipient
+// configured and is therefore able to encrypt data.
+func (e *Encryptor) CanEncrypt() bool {
+	return len(e.recipients) > 0
+}
+
+// CanDecrypt reports whether the Encryptor has at least one identity
+// configured and is therefore able to decrypt data.
+func (e *Encryptor) CanDecrypt() bool {
+	return len(e.identities) > 0
+}
