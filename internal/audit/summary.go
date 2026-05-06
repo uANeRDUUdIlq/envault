@@ -46,3 +46,12 @@ func Summarize(entries []Entry) Summary {
 
 	return s
 }
+
+// SuccessRate returns the ratio of succeeded entries to total entries as a
+// value between 0.0 and 1.0. Returns 0 if there are no entries.
+func (s Summary) SuccessRate() float64 {
+	if s.Total == 0 {
+		return 0
+	}
+	return float64(s.Succeeded) / float64(s.Total)
+}
