@@ -1,42 +1,48 @@
 package audit
 
-import "fmt"
+import "time"
 
-// Summary holds aggregated statistics over a set of audit entries.
+// Summary holds aggregated statistics over a set of audit log entries.
 type Summary struct {
 	Total      int
 	Succeeded  int
 	Failed     int
-	ByEvent    map[EventType]int
+	ByEvent    map[string]int
 	ByUser     map[string]int
+	FirstEntry *time.Time
+	LastEntry  *time.Time
 }
 
-// Summarize computes a Summary from the provided entries.
+// Summarize computes aggregate statistics from the provided entries.
 func Summarize(entries []Entry) Summary {
 	s := Summary{
-		ByEvent: make(map[EventType]int),
+		ByEvent: make(map[string]int),
 		ByUser:  make(map[string]int),
 	}
-	for _, e := range entries {
+
+	for i := range entries {
+		e := &entries[i]
 		s.Total++
+
 		if e.Success {
 			s.Succeeded++
 		} else {
 			s.Failed++
 		}
+
 		s.ByEvent[e.Event]++
 		if e.User != "" {
 			s.ByUser[e.User]++
 		}
-	}
-	return s
-}
 
-// String returns a human-readable summary string.
-func (s Summary) String() string {
-	return fmt.Sprintf(
-		"total=%d succeeded=%d failed=%d events=%d users=%d",
-		s.Total, s.Succeeded, s.Failed,
-		len(s.ByEvent), len(s.ByUser),
-	)
+		t := e.Timestamp
+		if s.FirstEntry == nil || t.Before(*s.FirstEntry) {
+			s.FirstEntry = &t
+		}
+		if s.LastEntry == nil || t.After(*s.LastEntry) {
+			s.LastEntry = &t
+		}
+	}
+
+	return s
 }
