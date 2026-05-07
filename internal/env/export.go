@@ -3,6 +3,7 @@ package env
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ const (
 // ExportOptions controls how variables are exported.
 type ExportOptions struct {
 	Format ExportFormat
-	Export bool // prefix with `export` in shell format
+	Export bool     // prefix with `export` in shell format
 	Keys   []string // if non-empty, only export these keys
 }
 
@@ -75,14 +76,24 @@ func (e *Exporter) filterKeys(vars map[string]string) map[string]string {
 	return out
 }
 
+// sortedKeys returns the keys of vars in sorted order, ensuring deterministic output.
+func sortedKeys(vars map[string]string) []string {
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func (e *Exporter) renderShell(vars map[string]string) string {
 	var sb strings.Builder
 	prefix := ""
 	if e.opts.Export {
 		prefix = "export "
 	}
-	for k, v := range vars {
-		fmt.Fprintf(&sb, "%s%s=%q\n", prefix, k, v)
+	for _, k := range sortedKeys(vars) {
+		fmt.Fprintf(&sb, "%s%s=%q\n", prefix, k, vars[k])
 	}
 	return sb.String()
 }
@@ -90,14 +101,13 @@ func (e *Exporter) renderShell(vars map[string]string) string {
 func (e *Exporter) renderJSON(vars map[string]string) string {
 	var sb strings.Builder
 	sb.WriteString("{\n")
-	i := 0
-	for k, v := range vars {
+	keys := sortedKeys(vars)
+	for i, k := range keys {
 		comma := ","
-		if i == len(vars)-1 {
+		if i == len(keys)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(&sb, "  %q: %q%s\n", k, v, comma)
-		i++
+		fmt.Fprintf(&sb, "  %q: %q%s\n", k, vars[k], comma)
 	}
 	sb.WriteString("}\n")
 	return sb.String()
