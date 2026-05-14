@@ -40,6 +40,19 @@ func NewSecretScanner() *SecretScanner {
 	return &SecretScanner{patterns: defaultPatterns}
 }
 
+// AddPattern registers an additional pattern with the scanner.
+// Returns an error if the label is empty or the pattern is nil.
+func (s *SecretScanner) AddPattern(label string, pattern *regexp.Regexp) error {
+	if label == "" {
+		return fmt.Errorf("pattern label must not be empty")
+	}
+	if pattern == nil {
+		return fmt.Errorf("pattern must not be nil")
+	}
+	s.patterns = append(s.patterns, SecretPattern{Label: label, Pattern: pattern})
+	return nil
+}
+
 // Scan checks the given vars for secret-like keys or values.
 func (s *SecretScanner) Scan(vars map[string]string) []SecretFinding {
 	var findings []SecretFinding
