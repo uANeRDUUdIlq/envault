@@ -8,80 +8,103 @@ import (
 	"regexp"
 )
 
-var validNamespace = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`)
+var validNamespaceName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
-// Namespace represents a named environment scope (e.g. "production", "staging").
-type Namespace struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Meta        map[string]string `json:"meta,omitempty"`
+type namespaceEntry struct {
+	Name string            `json:"name"`
+	Vars map[string]string `json:"vars"`
 }
 
-// NamespaceStore manages a collection of namespaces persisted to disk.
+type namespaceData struct {
+	Namespaces []namespaceEntry `json:"namespaces"`
+}
+
+// NamespaceStore manages named env namespaces persisted to a JSON file.
 type NamespaceStore struct {
-	path       string
-	namespaces map[string]Namespace
+	path string
+	data namespaceData
 }
 
-// NewNamespaceStore loads or initialises a namespace store at the given path.
+// NewNamespaceStore loads or initialises a NamespaceStore at path.
 func NewNamespaceStore(path string) (*NamespaceStore, error) {
-	ns := &NamespaceStore{path: path, namespaces: make(map[string]Namespace)}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return ns, nil
+	s := &NamespaceStore{path: path}
+	if err := s.load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
+	return s, nil
+}
+
+func (s *NamespaceStore) load() error {
+	b, err := os.ReadFile(s.path)
 	if err != nil {
-		return nil, fmt.Errorf("namespace store: read: %w", err)
+		return err
 	}
-	if err := json.Unmarshal(data, &ns.namespaces); err != nil {
-		return nil, fmt.Errorf("namespace store: parse: %w", err)
-	}
-	return ns, nil
-}
-
-// Add registers a new namespace. Returns an error if the name is invalid or already exists.
-func (s *NamespaceStore) Add(ns Namespace) error {
-	if !validNamespace.MatchString(ns.Name) {
-		return fmt.Errorf("invalid namespace name %q: must match %s", ns.Name, validNamespace)
-	}
-	if _, exists := s.namespaces[ns.Name]; exists {
-		return fmt.Errorf("namespace %q already exists", ns.Name)
-	}
-	s.namespaces[ns.Name] = ns
-	return s.save()
-}
-
-// Get returns the namespace with the given name.
-func (s *NamespaceStore) Get(name string) (Namespace, bool) {
-	ns, ok := s.namespaces[name]
-	return ns, ok
-}
-
-// List returns all registered namespaces in insertion-stable order.
-func (s *NamespaceStore) List() []Namespace {
-	out := make([]Namespace, 0, len(s.namespaces))
-	for _, ns := range s.namespaces {
-		out = append(out, ns)
-	}
-	return out
-}
-
-// Delete removes a namespace by name.
-func (s *NamespaceStore) Delete(name string) error {
-	if _, ok := s.namespaces[name]; !ok {
-		return fmt.Errorf("namespace %q not found", name)
-	}
-	delete(s.namespaces, name)
-	return s.save()
+	return json.Unmarshal(b, &s.data)
 }
 
 func (s *NamespaceStore) save() error {
-	data, err := json.MarshalIndent(s.namespaces, "", "  ")
+	b, err := json.MarshalIndent(s.data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("namespace store: marshal: %w", err)
+		return err
 	}
-	if err := os.WriteFile(s.path, data, 0o600); err != nil {
-		return fmt.Errorf("namespace store: write: %w", err)
+	return os.WriteFile(s.path, b, 0600)
+}
+
+// Add registers a new namespace.
+func (s *NamespaceStore) Add(name string) error {
+	if !validNamespaceName.MatchString(name) {
+		return fmt.Errorf("namespace: invalid name %q", name)
 	}
-	return nil
+	for _, ns := range s.data.Namespaces {
+		if ns.Name == name {
+			return fmt.Errorf("namespace: %q already exists", name)
+		}
+	}
+	s.data.Namespaces = append(s.data.Namespaces, namespaceEntry{Name: name, Vars: map[string]string{}})
+	return s.save()
+}
+
+// List returns all namespace names.
+func (s *NamespaceStore) List() []string {
+	names := make([]string, len(s.data.Namespaces))
+	for i, ns := range s.data.Namespaces {
+		names[i] = ns.Name
+	}
+	return names
+}
+
+// GetVars returns a copy of the vars for a namespace.
+func (s *NamespaceStore) GetVars(name string) (map[string]string, error) {
+	for _, ns := range s.data.Namespaces {
+		if ns.Name == name {
+			copy := make(map[string]string, len(ns.Vars))
+			for k, v := range ns.Vars {
+				copy[k] = v
+			}
+			return copy, nil
+		}
+	}
+	return nil, fmt.Errorf("namespace: %q not found", name)
+}
+
+// SetVars replaces the vars for a namespace.
+func (s *NamespaceStore) SetVars(name string, vars map[string]string) error {
+	for i, ns := range s.data.Namespaces {
+		if ns.Name == name {
+			s.data.Namespaces[i].Vars = vars
+			return s.save()
+		}
+	}
+	return fmt.Errorf("namespace: %q not found", name)
+}
+
+// Delete removes a namespace.
+func (s *NamespaceStore) Delete(name string) error {
+	for i, ns := range s.data.Namespaces {
+		if ns.Name == name {
+			s.data.Namespaces = append(s.data.Namespaces[:i], s.data.Namespaces[i+1:]...)
+			return s.save()
+		}
+	}
+	return fmt.Errorf("namespace: %q not found", name)
 }
