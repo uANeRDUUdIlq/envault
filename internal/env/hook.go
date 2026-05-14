@@ -46,6 +46,16 @@ func (r *HookRunner) Run(event HookEvent) error {
 	return nil
 }
 
+// HasHooks reports whether any hooks are registered for the given event.
+func (r *HookRunner) HasHooks(event HookEvent) bool {
+	for _, h := range r.hooks {
+		if h.Event == event {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *HookRunner) exec(command string) error {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
